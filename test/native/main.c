@@ -33,6 +33,8 @@ void test_qr_capacity_run(void);
 void test_base64_run(void);
 void test_ota_sign_run(void);
 void test_ota_dispatch_run(void);
+void test_guilloche_run(void);
+void test_boot_note_run(void);
 
 int main(void) {
     test_sha256_run();
@@ -63,6 +65,8 @@ int main(void) {
     test_base64_run();
     test_ota_sign_run();
     test_ota_dispatch_run();
+    test_guilloche_run();
+    test_boot_note_run();
 
     printf("%d/%d assertions passed\n", g_tests_run - g_tests_failed, g_tests_run);
     if (g_tests_failed > 0) {

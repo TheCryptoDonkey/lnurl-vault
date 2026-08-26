@@ -906,28 +906,69 @@ Same six hues, same distance apart, less fluorescent.
 | Holding to approve | the bar fills the full width of the bottom edge, in the state's colour, not white |
 | A seven-digit amount | the digits shrink; the id line survives, and nothing lands in the bar |
 
-**The boot sequence** is about two seconds where it used to be a blink:
+**The boot sequence** was, at the bench run below, a shutter, the name typed
+in, and a checklist. It has since become a bearer note printing itself
+(`src/ui/boot_screen.h`), keeping the shutter and the typed name in front of
+it. The band and bar wear the idle teal, because the idle card is what it
+animates into; the note itself is engraved in grey, ink on paper.
+
+> **Seen on glass — 2026-08-26, first two cuts.** Classic T-Display, flashed
+> from the branch. The first cut wore the web installer's royal blue and ran
+> at about half the holds below; the verdict was "too colourful and too
+> quick", with the typed name and the shutter from the previous boot missed.
+> The second put those back and slowed down, and the verdict was that the
+> engraved text was unreadable: the name at 18px in a hairline face, the
+> promise at 11px, the serial at 14px in the dim weight — every one under the
+> floor `font5x7.h` had already measured on this glass. This revision gives
+> the name a full-width row at the floor in a heavier cut, stamps the serial
+> once at the readable scale, and engraves the promise and the crest only
+> where they fit (the S3). The same session added: the engraving in full
+> teal was itself "too colourful" for the type to read over, and five
+> seconds was still "all too fast" — so the plates went to half-strength
+> teal and the holds doubled. That was "all just too colourful still", so
+> the plates went to grey: the note is monochrome and the only colour on the
+> boot is the band and the bar. And it was STILL "the purple — everything is
+> unreadable over it", which finally named the real fault: the compositor
+> dithered every blend, and on the near-black sheet that put magenta and
+> green speckle at the lowest bit under all the type, which the preview PNGs
+> show as a faint grain and the panel's gamma shows as purple. The dither
+> and the paper tint that needed it are gone. **NOT YET BENCH-RUN** itself.
 
 | Stage | Expect |
 |---|---|
-| 1 | A shutter: a full teal field opens from the centre outwards, settling into exactly the band-and-bar the cards use |
-| 2 | `LNURL` then `VAULT`, one character at a time, several times the size of the old single line |
-| 3 | The band becomes an identity strip — `v0.0.7  t-display` — and the middle clears |
-| 4 | `STORAGE`, `IDENTITY`, `LINK` appear one at a time as each actually comes up, the bar counting them off |
-| 5 | Held for about two thirds of a second, then the resting card |
+| 1 | A shutter: a full teal field opens from the centre outwards onto a blank sheet lying on the dark ground, with the band-and-bar the cards use above and below it. The band reads `v0.0.9  t-display` from the start |
+| 2 | `LNURL` then `VAULT`, one character at a time, in the device's own type at the largest size the sheet takes, held long enough to read |
+| 3 | `STORAGE` up: the border rolls in from the left with a soft leading edge, in grey (on the S3, the crest with it: an oval of engraved roses, bottom centre), and the typed name is swept away under it, column by column. Bar at one third |
+| 4 | `IDENTITY` up: a rosette traces itself in bottom-left, pen-plotter fashion, then `LNURL VAULT` in an engraved serif rolls in across the top of the sheet (on the S3, `PAY THE BEARER ON DEMAND` under it). Bar at two thirds |
+| 5 | `LINK` up: the serial — eight hex characters, `3D7E E0EB` style — stamps on bottom-right, at the same size as the self-check's lines, in the quieter weight. Bar full |
+| 6 | The note turns over about its long axis, squashing to a line and opening out the other side |
+| 7 | The back: `STORAGE`, `IDENTITY`, `LINK` with `OK` beside each, in the same border, held about two and a half seconds, then the resting card |
+| Rosette | Different on every device; the same on this one every boot. Compare two boards side by side, and reboot one |
+| Serial | Matches the first eight hex characters of `identify`'s `pubkey` |
+| Curves | The rosette and the crest are smooth — anti-aliased — not stepped. The border's hatched gutter reads as texture, not as a row of dots |
+| Ink | `LNURL VAULT` is the brightest thing on the finished note and can be READ at arm's length; the serial can be read too, in the quieter weight. Nothing on the note is smaller than the self-check's type except, on the S3, the promise line, which should still read up close |
+| Colour | The only colour on the boot is the band, the bar and the shutter. The note is greys on the dark ground; nothing on it is teal, and the bare sheet is one flat colour with no speckle in it |
+| Pace | Each state of the note is seen, not passed through: the typed name, the bare border, the rosette alone, the finished note, the back |
+| Failed pass | Its layer is simply absent: no storage, no border (and the typed name simply goes); no identity, no rosette and no serial. The back says `FAIL` in the full ink weight against a dimmed label |
+| Total | About ten seconds from the shutter to the resting card; no single state gone before it has been seen |
 
-The checklist is not decoration and not padding. Each of those three could
+The self-check is not decoration and not padding. Each of those three could
 already fail on its own — storage unavailable, a key that could not be
 written down, a transport that did not start — and each used to fail into an
-identical dark rectangle unless a host happened to be attached to ask. A
-failed step draws `FAIL` in the full ink weight against a dimmed label, so the
-one line worth noticing is not the one that looks like the rest.
+identical dark rectangle unless a host happened to be attached to ask. It
+used to be the whole boot screen; it is now the back of the note, so the
+front can be the device saying what it is and the back what it is doing.
 
 **Forcing a failure is the row worth being awkward about.** The honest way to
 see the `FAIL` state is to break storage: erase the NVS partition and let
 `vault_nvs_boot()` fail, or flash a build with the storage init stubbed out.
-The preview renderer draws it without a board (`00d-boot-storage-failed`),
-which is a substitute for guessing, not for the bench.
+The preview renderer draws it without a board (`00e-boot-storage-failed`,
+`00h-boot-self-check-failed`), and `make boot-frames` with
+`tools/boot_gif.py` plays the whole sequence at the firmware's timing — a
+substitute for guessing, not for the bench. One thing only glass can
+answer: whether the flip reads as a note turning over at the panel's real
+refresh. (The bench has already answered another: a dithered gradient on a
+near-black ground does not read as paper on this panel, it reads as purple.)
 
 One real bug fell out of the layout work: `display_note_detail()` never
 counted the id line when deciding how large the amount could be, so on a card

@@ -74,4 +74,22 @@
  * nobody answered is neither, and must not be dressed as either. */
 #define PALETTE_ACCENT_EXPIRED 0x9CB1 /* #9A958C */
 
+/* --- the boot note ------------------------------------------------------- */
+
+/* #6690E0. The boot's own colour: the royal blue the web installer's accent
+ * was changed to, so the first thing the device shows is the colour of the
+ * page that flashed it. It is NOT a state -- no card wears it, it means
+ * nothing about what the device is doing -- so it lives outside the six
+ * signals above. On the boot note it is the band and the bar only; the note
+ * itself is drawn in ink, off-white on the dark paper, because THIS panel
+ * renders a delicate low-contrast engraving as a muddy purple in its shadow
+ * region (four cuts learned that on glass) and does high contrast well. So
+ * the blue is spent where it is bold -- the furniture -- and the note is
+ * read in black and white. */
+#define PALETTE_ACCENT_BRAND 0x649C
+
+/* #1A1712. The paper of the boot note: the ground lifted just enough that a
+ * sheet reads as lying ON the desk rather than being it. */
+#define PALETTE_PAPER_NOTE 0x18A2
+
 #endif

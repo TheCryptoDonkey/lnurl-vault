@@ -271,7 +271,7 @@ void app_main(void) {
      * it. A flash that landed and one that silently did not are otherwise the
      * same dark screen -- and each stage below can fail on its own, which
      * used to be visible only over the wire, to a host that may not be
-     * attached yet. See boot_screen.h; this does add about two seconds to
+     * attached yet. See boot_screen.h; this does add about ten seconds to
      * boot, most of it spent saying something. */
     boot_screen_begin(LNURLVAULT_FW_VERSION, BOARD_NAME);
     vault_lock_init();
@@ -334,6 +334,14 @@ void app_main(void) {
      * the key is generated from the same RNG the notes use and has to be
      * stored before it is served. */
     identity_boot();
+    /* The boot note's rosette and serial come from the same key identify
+     * serves, and only when it IS served: a device that could not store its
+     * key has no identity to engrave. */
+    if (g_identity_ready) {
+        uint8_t pubkey[IDENTITY_PUBKEY_LEN];
+        identity_pubkey(g_identity_seed, pubkey);
+        boot_screen_identity(pubkey, sizeof(pubkey));
+    }
     /* Not "a key exists" -- "a key exists AND was stored". identity_boot()
      * refuses to serve one it could not write down, so this reports what the
      * device will actually answer identify with. */

@@ -47,6 +47,9 @@ SRC = ../../src/vault/sha256.c \
       ../../src/ui/font5x7.c \
       ../../src/ui/display.c \
       ../../src/ui/boot_screen.c \
+      ../../src/ui/note_scene.c \
+      ../../src/ui/note_art.c \
+      ../../src/ui/guilloche.c \
       hostgfx/hostgfx.c \
       ../../src/proto/line_proto.c \
       ../../src/proto/approval.c \
@@ -83,6 +86,8 @@ SRC = ../../src/vault/sha256.c \
       test_base64.c \
       test_ota_sign.c \
       test_ota_dispatch.c \
+      test_guilloche.c \
+      test_boot_note.c \
       main.c
 BIN = vault_tests
 
@@ -102,27 +107,38 @@ SAN_FLAGS = -fsanitize=address,undefined -fno-sanitize-recover=all -g -O1
 # src/ui/display.c the firmware runs. See hostgfx/hostgfx.h.
 PREVIEW_BIN = vault_preview
 PREVIEW_SRC = ../../src/ui/display.c ../../src/ui/boot_screen.c ../../src/ui/font5x7.c \
+              ../../src/ui/note_scene.c ../../src/ui/note_art.c ../../src/ui/guilloche.c \
               ../../src/proto/note_display.c \
               hostgfx/hostgfx.c preview.c
 PREVIEW_OUT ?= preview
 PREVIEW_ZOOM ?= 3
 
-.PHONY: test test-sanitize preview clean
+# The boot sequence as a directory of frames at 1:1 (tools/boot_gif.py
+# scales them up), with a list of how long each is up.
+FRAMES_OUT ?= $(PREVIEW_OUT)/frames
+
+.PHONY: test test-sanitize preview boot-frames clean
 test: $(BIN)
 	./$(BIN)
 
+# -lm for the boot note's guilloche (sinf, cosf) and flip (cosf, sqrtf); on
+# macOS it is in libc and the flag is a no-op, on CI's glibc it is not.
 $(BIN): $(SRC) $(HDR)
-	$(CC) $(CFLAGS) -o $(BIN) $(SRC) $(CJSON_LIBS)
+	$(CC) $(CFLAGS) -o $(BIN) $(SRC) $(CJSON_LIBS) -lm
 
 test-sanitize: $(SRC) $(HDR)
-	$(CC) $(CFLAGS) $(SAN_FLAGS) -o $(SAN_BIN) $(SRC) $(CJSON_LIBS)
+	$(CC) $(CFLAGS) $(SAN_FLAGS) -o $(SAN_BIN) $(SRC) $(CJSON_LIBS) -lm
 	./$(SAN_BIN)
 
 preview: $(PREVIEW_BIN)
 	./$(PREVIEW_BIN) $(PREVIEW_OUT) $(PREVIEW_ZOOM)
 
+boot-frames: $(PREVIEW_BIN)
+	mkdir -p $(FRAMES_OUT)
+	./$(PREVIEW_BIN) $(FRAMES_OUT) 1 frames
+
 $(PREVIEW_BIN): $(PREVIEW_SRC) $(HDR)
-	$(CC) $(CFLAGS) -o $(PREVIEW_BIN) $(PREVIEW_SRC)
+	$(CC) $(CFLAGS) -o $(PREVIEW_BIN) $(PREVIEW_SRC) -lm
 
 clean:
 	rm -f $(BIN) $(SAN_BIN) $(PREVIEW_BIN)

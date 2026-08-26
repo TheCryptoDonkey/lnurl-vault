@@ -2,6 +2,12 @@
  *
  *     make preview                    -> PNGs in ./preview/
  *     make preview PREVIEW_OUT=/tmp/shots PREVIEW_ZOOM=1
+ *     make boot-frames                -> the boot, frame by frame, in ./preview/frames/
+ *
+ * The frames are every vTaskDelay the boot makes, with how long each was
+ * asked to stay up, listed in <board>-frames.txt. tools/boot_gif.py turns a
+ * directory of them into a GIF at the firmware's own timing, which is the
+ * nearest thing to watching it on glass that needs no glass.
  *
  * Drawn by src/ui/display.c itself (see hostgfx/hostgfx.h), so what comes out
  * is what the glass gets. Amounts go through note_display.c rather than being
@@ -78,32 +84,70 @@ static void render_board(const char *board, int w, int h) {
     printf("%s (%dx%d)\n", board, w, h);
 
     /* The boot screen animates; vTaskDelay is a no-op here, so what lands is
-     * the last frame of each stage. Three shots because it is three screens,
-     * and the middle one -- a checklist half filled in -- is the one nobody
-     * would think to look at and the one a failing device stops on. */
+     * the last frame of each stage. One shot per printing pass, because each
+     * is a screen a failing device can stop on, plus the two the sequence
+     * ends on: the finished note and its back. The identity is a fixed fake
+     * key so the rosette and the serial are the same in every run. */
+    static const uint8_t pubkey[32] = {0xA3, 0xF9, 0x2C, 0x1D, 0x7E, 0x40, 0x91, 0x0B,
+                                       0x55, 0xC2, 0x18, 0x6A, 0xD9, 0x33, 0xF0, 0x27,
+                                       0x8C, 0x61, 0xBE, 0x04, 0x4F, 0xA7, 0x12, 0xE8,
+                                       0x39, 0x9D, 0x70, 0xC6, 0x0E, 0x83, 0x2B, 0x57};
     fresh(w, h);
-    boot_screen_begin("0.0.7", board);
+    boot_screen_begin("0.0.8", board);
     shot("00-boot-name");
 
     fresh(w, h);
-    boot_screen_begin("0.0.7", board);
+    boot_screen_begin("0.0.8", board);
     boot_screen_step("STORAGE", true);
-    boot_screen_step("IDENTITY", true);
-    shot("00b-boot-partway");
+    shot("00b-boot-underprint");
 
     fresh(w, h);
-    boot_screen_begin("0.0.7", board);
+    boot_screen_begin("0.0.8", board);
     boot_screen_step("STORAGE", true);
+    boot_screen_identity(pubkey, sizeof(pubkey));
+    boot_screen_step("IDENTITY", true);
+    shot("00c-boot-intaglio");
+
+    fresh(w, h);
+    boot_screen_begin("0.0.8", board);
+    boot_screen_step("STORAGE", true);
+    boot_screen_identity(pubkey, sizeof(pubkey));
     boot_screen_step("IDENTITY", true);
     boot_screen_step("LINK", true);
-    shot("00c-boot-ready");
+    shot("00d-boot-ready");
 
     fresh(w, h);
-    boot_screen_begin("0.0.7", board);
+    boot_screen_begin("0.0.8", board);
     boot_screen_step("STORAGE", false);
+    boot_screen_identity(pubkey, sizeof(pubkey));
     boot_screen_step("IDENTITY", true);
     boot_screen_step("LINK", true);
-    shot("00d-boot-storage-failed");
+    shot("00e-boot-storage-failed");
+
+    fresh(w, h);
+    boot_screen_begin("0.0.8", board);
+    boot_screen_step("STORAGE", true);
+    boot_screen_step("IDENTITY", false);
+    boot_screen_step("LINK", true);
+    shot("00f-boot-no-identity");
+
+    fresh(w, h);
+    boot_screen_begin("0.0.8", board);
+    boot_screen_step("STORAGE", true);
+    boot_screen_identity(pubkey, sizeof(pubkey));
+    boot_screen_step("IDENTITY", true);
+    boot_screen_step("LINK", true);
+    boot_screen_done();
+    shot("00g-boot-self-check");
+
+    fresh(w, h);
+    boot_screen_begin("0.0.8", board);
+    boot_screen_step("STORAGE", false);
+    boot_screen_identity(pubkey, sizeof(pubkey));
+    boot_screen_step("IDENTITY", true);
+    boot_screen_step("LINK", true);
+    boot_screen_done();
+    shot("00h-boot-self-check-failed");
 
     fresh(w, h);
     display_message(DISPLAY_STATE_IDLE, "3 NOTES", "TAP TO VIEW", NULL);
@@ -187,6 +231,51 @@ static void render_board(const char *board, int w, int h) {
     shot("14-browse-no-label");
 }
 
+/* --- the boot, frame by frame ---------------------------------------------- */
+
+static FILE *g_frames_list;
+static int g_frame_no;
+
+static void frame_hook(unsigned int ms) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s-frame-%04d.png", g_dir, g_board, g_frame_no);
+    if (hostgfx_write_png(path, g_zoom) == 0) {
+        fprintf(g_frames_list, "%s-frame-%04d.png %u\n", g_board, g_frame_no, ms);
+        g_written++;
+    } else {
+        g_failed++;
+    }
+    g_frame_no++;
+}
+
+static void record_boot(const char *board, int w, int h) {
+    g_board = board;
+    g_frame_no = 0;
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s-frames.txt", g_dir, board);
+    g_frames_list = fopen(path, "w");
+    if (!g_frames_list) {
+        printf("  FAILED to open %s\n", path);
+        g_failed++;
+        return;
+    }
+    static const uint8_t pubkey[32] = {0xA3, 0xF9, 0x2C, 0x1D, 0x7E, 0x40, 0x91, 0x0B,
+                                       0x55, 0xC2, 0x18, 0x6A, 0xD9, 0x33, 0xF0, 0x27,
+                                       0x8C, 0x61, 0xBE, 0x04, 0x4F, 0xA7, 0x12, 0xE8,
+                                       0x39, 0x9D, 0x70, 0xC6, 0x0E, 0x83, 0x2B, 0x57};
+    fresh(w, h);
+    hostgfx_set_delay_hook(frame_hook);
+    boot_screen_begin("0.0.8", board);
+    boot_screen_step("STORAGE", true);
+    boot_screen_identity(pubkey, sizeof(pubkey));
+    boot_screen_step("IDENTITY", true);
+    boot_screen_step("LINK", true);
+    boot_screen_done();
+    hostgfx_set_delay_hook(NULL);
+    fclose(g_frames_list);
+    printf("%s: %d frames\n", board, g_frame_no);
+}
+
 int main(int argc, char **argv) {
     if (argc > 1) {
         g_dir = argv[1];
@@ -197,8 +286,16 @@ int main(int argc, char **argv) {
             g_zoom = zoom;
         }
     }
+    const bool frames = argc > 3 && strcmp(argv[3], "frames") == 0;
     if (mkdir(g_dir, 0755) != 0) {
         /* Existing is fine; anything else shows up as a write failure below. */
+    }
+
+    if (frames) {
+        record_boot("t-display", 240, 135);
+        record_boot("t-display-s3", 320, 170);
+        printf("\n%d frame(s) written to %s/\n", g_written, g_dir);
+        return g_failed ? 1 : 0;
     }
 
     /* Both panels src/board/ supports. */
