@@ -355,8 +355,46 @@ static void test_a_message_with_nothing_to_say_still_clears_the_screen(void) {
     }
 }
 
+/* The classic panel wants its RGB565 bytes swapped, and display.c does that
+ * on the way to the glass. A fill sends one row buffer many times, so a swap
+ * that mutated the buffer in place swapped every second line back to wrong
+ * and striped the fill -- a solid screen came out banded, with text on it
+ * looking like it sat on a different ground. This forces the swap path on
+ * and insists a solid fill is one uniform colour. */
+static void test_a_swapped_fill_is_one_uniform_colour(void) {
+    for (int i = 0; i < PANELS; i++) {
+        hostgfx_reset(PANEL_W[i], PANEL_H[i]);
+        hostgfx_set_swap(true);
+        display_init();
+
+        /* A colour whose two bytes differ, so a missed or doubled swap is
+         * visible rather than a palindrome that hides it. */
+        display_fill_rect(0, 0, PANEL_W[i], PANEL_H[i], 0x1234);
+        const uint16_t top = hostgfx_pixel(0, 0);
+        UL_CHECK(top == 0x3412, "the fill is swapped once: 0x1234 reaches the glass as 0x3412");
+        long uniform = 1;
+        for (int y = 0; y < PANEL_H[i]; y++) {
+            for (int x = 0; x < PANEL_W[i]; x++) {
+                if (hostgfx_pixel(x, y) != top) {
+                    uniform = 0;
+                }
+            }
+        }
+        UL_CHECK(uniform, "every pixel of the fill is that one value: no striping");
+
+        /* And text on the fill: its cell background must match the fill, or
+         * the words sit on a visibly different ground. */
+        display_text(6, PANEL_H[i] / 2, "OK", FONT5X7_MIN_READABLE_SCALE, 0xF800, 0x1234);
+        UL_CHECK(hostgfx_pixel(0, 0) == top, "the corner is still the fill colour");
+        UL_CHECK(hostgfx_pixel(0, PANEL_H[i] / 2) == top,
+                 "and the text row's own background matches the fill around it");
+    }
+    hostgfx_reset(PANEL_W[0], PANEL_H[0]); /* leave the swap override off */
+}
+
 void test_card_render_run(void) {
     printf("-- card render --\n");
+    test_a_swapped_fill_is_one_uniform_colour();
     test_the_gesture_hint_reaches_the_glass();
     test_the_gesture_hint_clears_the_progress_bar();
     test_the_verb_reaches_the_glass();

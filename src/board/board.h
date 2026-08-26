@@ -71,6 +71,15 @@ typedef struct {
     esp_lcd_panel_handle_t panel; /* NULL if bring-up failed */
     int width;                    /* usable pixels, in the orientation the */
     int height;                   /* board has already applied */
+    /* True when this panel reads RGB565 in the opposite byte order to the
+     * one the ESP32 stores it in, so display.c must swap the two bytes of
+     * every pixel before sending. The classic T-Display's generic ST7789
+     * bring-up needs it: without it teal (0x4554) reaches the glass as green
+     * (0x5445), which is exactly how the idle screen looked -- "a green
+     * background" -- for as long as this board has run. A board that sets
+     * its own byte order at bring-up (see the S3's RAMCTRL) leaves this
+     * false. */
+    bool swap_bytes;
 } board_display_t;
 
 /* Powers and initialises the panel, applying whatever rotation, mirroring,

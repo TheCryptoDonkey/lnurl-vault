@@ -63,6 +63,31 @@ static uint16_t *next_row(void) {
     return r;
 }
 
+/* See board_display_t.swap_bytes: whether every pixel's two bytes are
+ * swapped on the way to the panel. Read once at init. */
+static bool g_swap_bytes;
+
+/* The one place a composed row reaches the panel. When the board wants the
+ * bytes swapped, swaps them in place and sends -- so EVERY caller must hand
+ * over a row it will not reuse, which each does: display_text and
+ * display_draw_row take a fresh ring buffer per row, and display_fill_rect
+ * was changed to do the same (it used to fill one and send it h times, and
+ * an in-place swap turned that into stripes -- a solid screen came out
+ * banded, with text on it looking like it sat on a different ground).
+ * Swapping in place rather than into another ring buffer is deliberate: a
+ * second buffer would, once the ring wrapped, alias the caller's and corrupt
+ * it mid-fill.
+ *
+ * One row tall, `w` pixels wide, top-left at (x, y). */
+static void blit_row(int x, int y, int w, uint16_t *row) {
+    if (g_swap_bytes) {
+        for (int i = 0; i < w; i++) {
+            row[i] = (uint16_t)((row[i] << 8) | (row[i] >> 8));
+        }
+    }
+    esp_lcd_panel_draw_bitmap(g_panel, x, y, x + w, y + 1, row);
+}
+
 static display_state_t g_current_state = DISPLAY_STATE_IDLE;
 
 /* Whether the light is off. Not a display_state_t: every state is something
@@ -167,6 +192,7 @@ void display_init(void) {
     g_panel = d.panel;
     g_width = d.width;
     g_height = d.height;
+    g_swap_bytes = d.swap_bytes;
 
     if (g_panel) {
         bool all = true;
@@ -222,14 +248,29 @@ void display_fill_rect(int x, int y, int w, int h, uint16_t color) {
     if (x < 0 || y < 0 || x + w > g_width || y + h > g_height) {
         return;
     }
-    uint16_t *row = next_row();
-
-    for (int i = 0; i < w; i++) {
-        row[i] = color;
-    }
+    /* A fresh ring buffer per row, not one filled once and reused: blit_row
+     * may swap the buffer's bytes in place (see it on why), and a reused
+     * buffer would be swapped back and forth, striping the fill. Refilling w
+     * pixels a row is nothing next to the transfer. */
     for (int r = 0; r < h; r++) {
-        esp_lcd_panel_draw_bitmap(g_panel, x, y + r, x + w, y + r + 1, row);
+        uint16_t *row = next_row();
+        for (int i = 0; i < w; i++) {
+            row[i] = color;
+        }
+        blit_row(x, y + r, w, row);
     }
+}
+
+void display_draw_row(int x, int y, int w, const uint16_t *pixels) {
+    if (!display_ready() || !pixels || w <= 0) {
+        return;
+    }
+    if (x < 0 || y < 0 || x + w > g_width || y >= g_height) {
+        return;
+    }
+    uint16_t *row = next_row();
+    memcpy(row, pixels, (size_t)w * sizeof(uint16_t));
+    blit_row(x, y, w, row);
 }
 
 static void fill_screen(uint16_t color) {
@@ -319,7 +360,7 @@ void display_text(int x, int y, const char *text, int scale, uint16_t fg, uint16
             }
             dst[px] = colour;
         }
-        esp_lcd_panel_draw_bitmap(g_panel, x, y + row, x + line_w, y + row + 1, dst);
+        blit_row(x, y + row, line_w, dst);
     }
 }
 /* The two buttons, drawn where they physically are, with the one that
@@ -593,8 +634,14 @@ void display_message(display_state_t state, const char *title, const char *line1
         y = top;
     }
 
+    /* On a card the title takes the state's OWN colour, not the off-white
+     * ink: the resting screen is the one a person looks at for hours, and a
+     * dark panel with two grey words on it reads as off. The count in teal
+     * is the colour the thin rule alone could not carry. On a field the
+     * panel is already the colour and the title is dark on it, unchanged. */
+    const uint16_t title_ink = state_is_field(state) ? ink : display_state_accent(state);
     if (title_scale > 0) {
-        draw_centred(y, title, title_scale, ink, bg);
+        draw_centred(y, title, title_scale, title_ink, bg);
         y += FONT5X7_HEIGHT * title_scale + gap;
     }
     /* The lines under a title are context -- "TAP TO VIEW", the verb an

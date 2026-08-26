@@ -28,6 +28,13 @@ static long g_offscreen;
  * powers up lit; so does this. */
 static bool g_backlight = true;
 
+/* Whether board_display_init() reports the byte-swap on. See hostgfx_set_swap. */
+static bool g_force_swap;
+
+void hostgfx_set_swap(bool on) {
+    g_force_swap = on;
+}
+
 /* Row buffers come from here, not malloc -- see esp_heap_caps.h. */
 static unsigned char g_pool[64 * 1024];
 static size_t g_pool_used;
@@ -60,6 +67,7 @@ void hostgfx_reset(int w, int h) {
     g_h = h;
     g_offscreen = 0;
     g_backlight = true;
+    g_force_swap = false;
     for (int y = 0; y < HOSTGFX_MAX_H; y++) {
         for (int x = 0; x < HOSTGFX_MAX_W; x++) {
             g_fb[y][x] = HOSTGFX_UNPAINTED;
@@ -91,7 +99,11 @@ long hostgfx_offscreen_pixels(void) {
 /* --- the ESP-IDF surface display.c draws through --------------------------- */
 
 board_display_t board_display_init(void) {
-    board_display_t out = {.panel = &g_fake_panel, .width = g_w, .height = g_h};
+    /* Natural byte order: the tests inspect logical RGB565 values, and the
+     * real byte-swap is a property of one physical panel, not of the drawing
+     * code they exercise. */
+    board_display_t out = {.panel = &g_fake_panel, .width = g_w, .height = g_h,
+                           .swap_bytes = g_force_swap};
     return out;
 }
 
@@ -214,6 +226,36 @@ int hostgfx_first_changed_row(void) {
         }
     }
     return -1;
+}
+
+long hostgfx_changed_pixels(int x0, int y0, int x1, int y1) {
+    long n = 0;
+    for (int y = y0; y < y1; y++) {
+        for (int x = x0; x < x1; x++) {
+            if (x < 0 || y < 0 || x >= g_w || y >= g_h) {
+                continue;
+            }
+            if (g_fb[y][x] != g_snap[y][x]) {
+                n++;
+            }
+        }
+    }
+    return n;
+}
+
+/* --- time -------------------------------------------------------------------- */
+
+static hostgfx_delay_hook_t g_delay_hook;
+
+void hostgfx_set_delay_hook(hostgfx_delay_hook_t hook) {
+    g_delay_hook = hook;
+}
+
+void hostgfx_delay(unsigned int ticks) {
+    /* pdMS_TO_TICKS is the identity here, so ticks are milliseconds. */
+    if (g_delay_hook) {
+        g_delay_hook(ticks);
+    }
 }
 
 /* --- PNG ------------------------------------------------------------------- */

@@ -237,6 +237,12 @@ board_display_t board_display_init(void) {
     drive_high(PIN_LCD_BL);
 
     out.panel = panel;
+    /* Not swapped here: this board's custom init sets RAMCTRL/COLMOD itself
+     * (see the generic-init note above), so its byte order is the panel's
+     * own. If the S3 ever shows the same swapped colours the classic did --
+     * teal as green -- this is the flag to set. NOT YET RE-CHECKED on glass
+     * since the classic's swap was found. */
+    out.swap_bytes = false;
     ESP_LOGI(TAG, "%s display up: %dx%d", BOARD_NAME, out.width, out.height);
     return out;
 }

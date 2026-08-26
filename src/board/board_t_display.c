@@ -171,6 +171,14 @@ board_display_t board_display_init(void) {
     gpio_set_level(PIN_TFT_BL, 1);
 
     out.panel = panel;
+    /* This panel reads the two bytes of each RGB565 pixel big-endian, the
+     * opposite of how the ESP32 stores them, and the generic esp_lcd ST7789
+     * bring-up above sends them as stored. So every colour has been landing
+     * byte-swapped -- teal as green, and on the boot note royal blue as
+     * yellow and a near-black note as bright purple. display.c swaps when
+     * this is set; the S3 sets its byte order in its own RAMCTRL init and
+     * does not. */
+    out.swap_bytes = true;
     ESP_LOGI(TAG, "%s display up: %dx%d", BOARD_NAME, out.width, out.height);
     return out;
 }

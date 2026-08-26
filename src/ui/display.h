@@ -110,6 +110,14 @@ void display_set_confirm_side(display_confirm_side_t side);
 
 void display_fill_rect(int x, int y, int w, int h, uint16_t color);
 
+/* Sends one already-composed row: `w` pixels of RGB565 to (x, y). The boot
+ * note (note_scene.c) composes its rows itself, a blend at a time, and this
+ * is how they reach the panel without note_scene.c knowing what a panel is.
+ * Copied into a DMA buffer from the ring here rather than sent from the
+ * caller's memory, for the reason ROW_BUFFERS gives: the transfer outlives
+ * the call. Out-of-bounds rows are dropped, as display_fill_rect drops. */
+void display_draw_row(int x, int y, int w, const uint16_t *pixels);
+
 /* Draws `text` with its top-left at (x, y), each font pixel scaled to a
  * scale x scale block. Clips at the panel edge rather than wrapping or
  * refusing: a label arrives over the wire, so an over-long one must simply
